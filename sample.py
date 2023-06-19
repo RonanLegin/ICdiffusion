@@ -30,8 +30,8 @@ data_path = config.model.workdir + cosmo_dir
 
 
 # Build pytorch dataloaders
-input_data = np.float32(np.random.normal(size=(1,32,32,32)))#np.load(data_path + 'observation.npy'))
-label_data = np.float32(np.random.normal(size=(1,32,32,32)))#np.float32(np.load(data_path + 'truth.npy'))
+input_data = np.float32(np.load(data_path + 'observation.npy'))
+label_data = np.float32(np.load(data_path + 'truth.npy'))
 input_data = torch.from_numpy(input_data).to(DEVICE)
 label_data = torch.from_numpy(label_data).to(DEVICE)
 input_data = torch.unsqueeze(input_data, dim=1)
