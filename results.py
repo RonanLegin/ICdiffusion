@@ -1,6 +1,6 @@
 import numpy as np
 from tqdm import tqdm
-from config import get_config
+from utils import get_config
 import matplotlib.pyplot as plt
 import logging
 import os
@@ -25,7 +25,7 @@ w = 4
 
 cosmo_dir = str(sys.argv[1]) 
 
-config = get_config()
+config = get_config('./config.json')
 Nside = config.data.image_size
 DEVICE = config.device
 

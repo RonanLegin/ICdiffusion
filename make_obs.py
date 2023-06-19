@@ -1,9 +1,9 @@
 import numpy as np
-from config import get_config
+from utils import get_config
 import os
 import logging
 
-config = get_config()
+config = get_config('./config.json')
 Nside = config.data.image_size
 
 # fiducial cosmology
