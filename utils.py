@@ -1,5 +1,30 @@
 import torch
 import numpy as np
+import json
+
+
+class Config:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+
+def dict_to_config(d):
+    for k, v in d.items():
+        if isinstance(v, dict):
+            d[k] = dict_to_config(v)
+    return Config(**d)
+
+
+def get_config(config_path):
+    # Load parameters from a json file back into the Config class
+    with open(config_path, 'r') as f:
+        loaded_config_dict = json.load(f)
+
+    # Convert dictionaries back into Config objects
+    loaded_config = dict_to_config(loaded_config_dict)
+
+    return loaded_config
+
 
 # Define sigma(t) mapping
 def get_sigma_time(sigma_min, sigma_max):

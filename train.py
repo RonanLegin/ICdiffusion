@@ -3,8 +3,7 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import TensorDataset, DataLoader
 from torch.nn.parallel import DistributedDataParallel, DataParallel
-from config import get_config
-from utils import get_sigma_time, get_sample_time
+from utils import get_sigma_time, get_sample_time, get_config
 from model import UNet3DModel
 torch.backends.cudnn.benchmark = True
 import os
@@ -12,13 +11,15 @@ import logging
 from torch_ema import ExponentialMovingAverage
 
 
-config = get_config()
-Nside = config.data.image_size
-DEVICE = config.device
 
-if not os.path.exists(config.model.workdir):
-    os.makedirs(config.model.workdir)
-    logging.warning(f"Creatig work directory {config.model.workdir}.")
+config = get_config('./config.json')
+Nside = config.data.image_size
+#DEVICE = config.device
+DEVICE = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
+# Create directory structure
+checkpoint_dir = os.path.join(config.model.workdir, "checkpoints")
+os.makedirs(checkpoint_dir, exist_ok=True)
 
 sigma_time = get_sigma_time(config.model.sigma_min, config.model.sigma_max)
 sample_time = get_sample_time(config.model.sampling_eps, config.model.T)
@@ -71,7 +72,7 @@ def train_one_epoch():
 
 # Initialize score model
 model = DataParallel(UNet3DModel(config))
-model = model.cuda()
+model = model.to(DEVICE)
 
 # Define optimizer
 optimizer = torch.optim.Adam(
@@ -83,33 +84,33 @@ optimizer = torch.optim.Adam(
         )
 ema = ExponentialMovingAverage(model.parameters(), decay=config.model.ema_rate)
 init_epoch = 0
-checkpoint_dir = os.path.join(config.model.workdir, "checkpoints")
-if not os.path.exists(checkpoint_dir):
-    os.makedirs(checkpoint_dir)
-    logging.warning(f"No checkpoint found at {checkpoint_dir}. "
-                    f"Returned the same state as input")
-else:
-    loaded_state = torch.load(os.path.join(checkpoint_dir, 'checkpoint.pth'), map_location=DEVICE)
+
+# Check for existing checkpoint
+checkpoint_path = os.path.join(checkpoint_dir, 'checkpoint.pth')
+if os.path.isfile(checkpoint_path):
+    loaded_state = torch.load(checkpoint_path, map_location=DEVICE)
     optimizer.load_state_dict(loaded_state['optimizer'])
     model.load_state_dict(loaded_state['model'], strict=False)
     ema.load_state_dict(loaded_state['ema'])
     init_epoch = int(loaded_state['epoch'])
-    logging.warning(f"Loaded checkpoint.")
+    logging.warning(f"Loaded checkpoint from {checkpoint_path}.")
+else:
+    logging.warning(f"No checkpoint found at {checkpoint_path}. Starting from scratch.")
 
 
-
-# Build pytorch dataloaders
+# Build pytorch dataloaders and apply data preprocessing
 input_data = np.float32(np.load(config.data.path + 'quijote128_hyper_z0_train.npy'))
 label_data = np.float32(np.load(config.data.path + 'quijote128_hyper_z127_train.npy'))
 label_data = (label_data - np.mean(label_data, axis=(1,2,3), keepdims=True))/np.std(label_data, axis=(1,2,3), keepdims=True)
-
 
 input_data = torch.from_numpy(input_data)
 label_data = torch.from_numpy(label_data)
 input_data = torch.unsqueeze(input_data, dim=1)
 label_data = torch.unsqueeze(label_data, dim=1)
 train_dataset = TensorDataset(input_data, label_data)
-training_loader = DataLoader(train_dataset, config.training.batch_size, shuffle=True, num_workers=1, pin_memory=True )
+training_loader = DataLoader(train_dataset, config.training.batch_size, shuffle=True, num_workers=0)#, pin_memory=True)
+
+
 model.train(True)
 
 logging.info('Starting training loop.')
